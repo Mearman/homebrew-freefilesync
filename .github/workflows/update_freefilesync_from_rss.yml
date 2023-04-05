@@ -1,0 +1,57 @@
+name: Update FreeFileSync Cask from RSS
+
+on:
+  workflow_dispatch:
+
+jobs:
+  update_cask:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v2
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: 2.7
+
+      - name: Install dependencies
+        run: gem install nokogiri http rss
+
+      - name: Update FreeFileSync cask from RSS
+        run: |
+          require "nokogiri"
+          require "http"
+          require "digest"
+          require "rss"
+
+          cask_file = "Casks/freefilesync.rb"
+
+          rss_feed_url = "https://freefilesync.org/news-feed.php"
+          rss_feed_content = HTTP.get(rss_feed_url).to_s
+          rss_feed = RSS::Parser.parse(rss_feed_content, false)
+
+          latest_release_title = rss_feed.items.first.title
+          latest_version = latest_release_title.match(/FreeFileSync (\d+\.\d+)/)[1]
+
+          download_url = "https://www.freefilesync.org/download/FreeFileSync_#{latest_version}_macOS.zip"
+          file_response = HTTP.get(download_url)
+          sha256_checksum = Digest::SHA256.hexdigest(file_response.body.to_s)
+
+          cask_content = File.read(cask_file)
+          cask_content.gsub!(/version ".*"/, "version \"#{latest_version}\"")
+          cask_content.gsub!(/sha256 ".*"/, "sha256 \"#{sha256_checksum}\"")
+
+          File.write(cask_file, cask_content)
+
+      - name: Commit and push changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add Casks/freefilesync.rb
+          git diff --quiet && git diff --staged --quiet || git commit -m "Update FreeFileSync to version ${LATEST_VERSION}"
+          git tag v${LATEST_VERSION}
+          git push origin main --follow-tags
+        env:
+          LATEST_VERSION: ${{ steps.update_cask.outputs.latest_version }}

@@ -1,0 +1,34 @@
+name: Test Tap
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test_tap:
+    runs-on: macos-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v2
+
+      - name: Install Homebrew
+        run: |
+          /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+      - name: Add tap
+        run: |
+          brew tap Mearman/freefilesync ${GITHUB_WORKSPACE}
+
+      - name: Update Homebrew
+        run: |
+          brew update
+
+      - name: Test tap
+        run: |
+          brew install --cask freefilesync
+          brew uninstall --cask freefilesync

@@ -1,0 +1,53 @@
+name: Update FreeFileSync Cask
+
+on:
+  workflow_dispatch:
+
+jobs:
+  update_cask:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v2
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: 2.7
+
+      - name: Install dependencies
+        run: gem install nokogiri http
+
+      - name: Update FreeFileSync cask
+        run: |
+          require "nokogiri"
+          require "http"
+          require "digest"
+
+          cask_file = "Casks/freefilesync.rb"
+
+          download_page = Nokogiri::HTML(HTTP.get("https://freefilesync.org/download.php").to_s)
+          latest_version = download_page.at_css("div[style='font-size: 22px'] span").text
+          download_url = "https://www.freefilesync.org/download/FreeFileSync_#{latest_version}_macOS.zip"
+          file_response = HTTP.get(download_url)
+          sha256_checksum = Digest::SHA256.hexdigest(file_response.body.to_s)
+
+          cask_content = File.read(cask_file)
+          cask_content.gsub!(/version ".*"/, "version \"#{latest_version}\"")
+          cask_content.gsub!(/sha256 ".*"/, "sha256 \"#{sha256_checksum}\"")
+
+          File.write(cask_file, cask_content)
+        env:
+          ACTIONS_ALLOW_UNSECURE_COMMANDS: "true"
+
+      - name: Commit and push changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add Casks/freefilesync.rb
+          git diff --quiet && git diff --staged --quiet || git commit -m "Update FreeFileSync to version ${LATEST_VERSION}"
+          git tag v${LATEST_VERSION}
+          git push origin main --follow-tags
+        env:
+          LATEST_VERSION: ${{ steps.update_cask.outputs.latest_version }}
